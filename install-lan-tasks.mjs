@@ -9,7 +9,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const PROFILE = 'C:\\Users\\Administrator\\.dsh\\profiles\\desktop'
+/** 目标 profile 目录：默认这台机器的 desktop profile，克隆到别的机器时用 LAN_TASKS_PROFILE 覆盖。
+ *  别用 DSH_ 前缀：宿主已经占用了 DSH_PROFILE=desktop（相对路径），拿它当目录会把
+ *  node_modules 建到当前工作目录里，还会造出一个指向自己的 junction。 */
+const PROFILE = process.env.LAN_TASKS_PROFILE || 'C:\\Users\\Administrator\\.dsh\\profiles\\desktop'
+if (!path.isAbsolute(PROFILE)) {
+  throw new Error(`profile 目录必须是绝对路径，收到：${PROFILE}（要换目录请设 LAN_TASKS_PROFILE）`)
+}
 /** 插件源码目录 = 本脚本所在目录，工作区搬走也不用改这里。 */
 const PLUGIN = path.dirname(fileURLToPath(import.meta.url))
 const NAME = '@local/dsh-lan-tasks'

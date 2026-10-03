@@ -101,6 +101,22 @@ node install-lan-tasks.mjs
 
 > 工作区搬走或改名后，重跑一次 `node install-lan-tasks.mjs` 就能把链接指到新位置。
 
+**克隆到别的机器**（仓库地址 <https://github.com/YG224586/dsh-lan-tasks>）：
+
+```powershell
+git clone https://github.com/YG224586/dsh-lan-tasks.git D:\workspaces\dsh-lan-tasks
+cd D:\workspaces\dsh-lan-tasks
+node install-lan-tasks.mjs                                       # 默认这台机器的 desktop profile
+$env:LAN_TASKS_PROFILE='C:\Users\你\.dsh\profiles\desktop'; node install-lan-tasks.mjs   # 别的机器覆盖一下
+```
+
+脚本用 `import.meta.url` 定位自己所在目录，克隆到哪儿都不用改路径。
+包名固定是 `@local/dsh-lan-tasks`（`cordis.patch.yml` 按这个 id 注册），与仓库名无关。
+脚本另外会拒绝相对路径的 profile 目录，避免写到意料之外的地方。
+
+> 覆盖变量千万别用宿主已经占用的 `DSH_PROFILE` —— 在 DSH 会话里它的值是相对路径 `desktop`，
+> 拿它当 profile 目录会把 `node_modules` 建到当前工作目录，并造出一个指向自己的 junction。
+
 原始备份：`profiles\desktop\package.json.bak-20261003-154410` 与
 `pnpm-lock.yaml.bak-20261003-154410`；搬家前又备份了一份 `package.json.bak-20261003-155546`。
 回滚 = 把备份覆盖回去 + 删掉那个 junction。

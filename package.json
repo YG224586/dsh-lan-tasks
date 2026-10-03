@@ -1,0 +1,28 @@
+{
+  "name": "@local/dsh-lan-tasks",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "局域网任务看板：在手机浏览器里实时查看 DSH 的会话、任务板、后台作业与活动流水。",
+  "icon": "./icon.svg",
+  "meta": {
+    "title": "局域网任务看板",
+    "description": "用手机连同一个 Wi-Fi 就能看当前任务干到哪一步了。"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./page": "./page.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "page.js",
+    "cordis.patch.yml",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

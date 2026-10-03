@@ -1,0 +1,23 @@
+# 依赖与构建产物（本插件是纯 ESM 源码，无构建步骤）
+node_modules/
+dist/
+*.tgz
+
+# 运行时产物
+*.log
+logs/
+*.pid
+
+# 备份与临时文件
+*.bak
+*.bak-*
+*.tmp
+*.orig
+*~
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

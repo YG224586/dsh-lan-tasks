@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-lan-tasks
+      name: '@local/dsh-lan-tasks'

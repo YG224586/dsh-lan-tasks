@@ -12,6 +12,9 @@ v1.3.0 起手机端不只是「看」：点一下会话就能进去看完整时�
 哪一步报错、历史里的图片），还能直接在手机上**发消息**（文字 + 图片），等于坐到电脑前敲回车。
 ⚠️ 这等于把「指挥 agent」的入口放到局域网里，见第 4 节末尾的安全说明。
 
+v1.4.0 起两个界面都换成 **Material Design 3 Expressive** 的皮：M3 颜色角色 + 形状阶（4/8/12/16/20/28
+的圆角梯子）+ 弹簧缓动 + `prefers-reduced-motion` 降级；手机页面还带一整套浅色取值（见第 5 节）。
+
 ---
 
 ## 1. 目标
@@ -33,7 +36,8 @@ DSH 自己的 Web 服务只监听回环地址（实测 `TCP 127.0.0.1:19387 LIST
 | `token` 默认空 | 只在可信局域网用；需要时能在插件 config 里填一个共享密钥 |
 | 手机页面继续自建服务，桌面面板另走宿主 `webServer` | 手机要在局域网里连上，必须自己绑 `0.0.0.0`；而 DSH 界面跑在 `127.0.0.1:19387`，跟 8791 不同源，面板里取数据只能走宿主 webServer 的同源路由，否则跨域 |
 | 二维码在宿主侧生成 SVG，前端只放 `<img>` | 浏览器端不塞编码器：少一份依赖、少一份要调试的代码；宿主已经能算出局域网地址，顺手把图画出来 |
-| 自己手写二维码编码器（`qrcode.js`，零依赖） | 不引 npm 包（这台机器 registry 不稳），只用字节模式 + 纠错等级 L + 版本 1-5，够放一条 `<200 字节的 URL`；正确性交给 OpenCV 独立解码验证（见第 7 节） |
+| 自己手写二维码编码器（`qrcode.js`，零依赖） | 不引 npm 包（这台机器 registry 不稳），只用字节模式 + 纠错等级 L + 版本 1-5，够放一条 `<200 字节的 URL`；正确性交给 OpenCV 独立解码验证（见第 8 节） |
+| 皮肤用 MD3 Expressive，但面板颜色仍取 DSH 主题 token | 手机页面是独立站点，配色可以自己定；桌面面板长在别人的界面里，自带配色会和用户主题打架 —— 只借 M3 的形状/字阶/动效，颜色走 `--dsw-alias-*` 映射 |
 | 面板请求按序号作废过期响应 | 5 秒轮询下慢响应回来会盖掉更新的状态（先发的失败被后到的成功覆盖），`usePanelData` 里用一个自增 ticket 丢掉过期结果 |
 | 发消息复用 `sessionController.prompt()`，不自己造通路 | 宿主已有「把一句话送进会话」的官方入口（`mode: 'queue' \| 'steer'`），插件只做 HTTP 到它的搬运；`requestId` 自己生成，`clientTimeZone` 用手机时区 |
 | 写入口只留一个 `POST /api/send`，且**强制 `Content-Type: application/json`** | 跨站表单只能发 `urlencoded`/`multipart`/`text-plain`，伪造不了 JSON 头；跨源 `fetch` 带这个头会先发预检 `OPTIONS`，而本服务对 `OPTIONS` 回 405 —— 两道都不用额外依赖就挡住了 CSRF |
@@ -56,8 +60,8 @@ DSH 自己的 Web 服务只监听回环地址（实测 `TCP 127.0.0.1:19387 LIST
 | `交付说明.md` | 交付记录：现状、怎么用、怎么验、怎么回滚 |
 | `install-lan-tasks.mjs` | 一键接进 desktop profile（幂等，可重复跑） |
 | `smoke-lan-tasks.mjs` | 离线冒烟测试（宿主侧）：83 项断言（`SMOKE_NO_CONTROLLER=1` 68 项、`SMOKE_NO_WEB=1` 70 项） |
-| `smoke-client.mjs` | 离线冒烟测试（桌面客户端插件）：48 项断言 |
-| `smoke-page.mjs` | 离线冒烟测试（手机页面）：假 DOM 跑页面脚本 + 真 HTTP 打回插件，52 项断言 |
+| `smoke-client.mjs` | 离线冒烟测试（桌面客户端插件）：54 项断言 |
+| `smoke-page.mjs` | 离线冒烟测试（手机页面）：假 DOM 跑页面脚本 + 真 HTTP 打回插件，58 项断言 |
 
 ## 4. HTTP 接口与手机端怎么用
 
@@ -142,7 +146,60 @@ maxImages: 4           # 一条消息最多几张图
 - 发送接口本身有 CSRF 防护（强制 JSON 头 + `OPTIONS` 405），但那只挡浏览器跨站，
   挡不住同网段直接 `curl`。
 
-## 5. 数据来源（读的部分；写只有 `POST /api/send` 一个口）
+## 5. 外观：MD3 Expressive（v1.4.0 起）
+
+两个界面都是手写 CSS，没有构建步骤、不引外部字体或图标库 —— 皮肤就是一段字符串常量。
+
+### 5.1 手机页面（`page.js` 里的 `CSS`）
+
+`:root` 定义一整套 M3 颜色角色，页面里只写角色名，硬编码色值只出现在这一处：
+
+| 角色 | 深色默认值 | 用在哪 |
+| --- | --- | --- |
+| `--md-primary` / `--md-on-primary` | `#b9c8ff` / `#1d2f60` | 发送键（FAB）、焦点环 |
+| `--md-primary-container` | `#2f3f72` / `#dbe1ff` | hero 卡渐变、「我」这侧的气泡 |
+| `--md-surface` / `--md-surface-dim` | `#0f1216` / `#0b0e12` | 页面底色、顶栏 |
+| `--md-sc-low` / `--md-sc` / `--md-sc-high` / `--md-sc-highest` | `#15191e` 起 | 卡片、统计瓦片、助手气泡的层级 |
+| `--md-on-surface` / `--md-on-surface-variant` | `#e3e2e6` / `#c5c6d0` | 正文、次要文字 |
+| `--md-outline` / `--md-outline-variant` | `#8f9099` / `#43474e` | 分隔线、chip 描边 |
+| `--md-error` / `--md-error-container` | `#ffb4ab` / `#93000a` | 报错那一步、删除按钮 |
+
+形状阶只有这几个值：`--r-xs:4` → `--r-sm:8` → `--r-md:12` → `--r-lg:16` → `--r-xl:20` → `--r-2xl:28` → `--r-full:999`；
+动效三条：`--e-spring:cubic-bezier(.34,1.56,.64,1)`（回弹）、`--e-emph:cubic-bezier(.2,0,0,1)`（加速收尾）、
+`--d-fast:180ms` / `--d-mid:280ms` / `--d-slow:460ms`。关键帧只有三个：`ltRise`（卡片入场）、
+`ltSheetIn`（整屏详情自底部升起）、`ltPulse`（运行指示灯呼吸）。
+
+几处刻意的设计：时间线气泡是「曲奇形」——助手一侧圆角 `20 20 20 4`、我这侧 `20 20 4 20`；
+整屏详情是上两角 28px 的 bottom sheet（抓手用 `::after` 画一个 36×4 的圆角条）；
+发送键是 48px 药丸形 FAB（`:active` 缩到 .96）；图片缩略图 64px，删除钮是 error-container 的小圆。
+
+旧变量名（`--bg` / `--card` / `--line` / `--fg` / `--dim` / `--err` …）**保留成别名**：
+页面里还有内联 `style="color:var(--err)"` 这类写法，别名一删就会静默变色。
+
+### 5.2 桌面面板（`client.js` 里的 `CSS`）
+
+桌面面板**不自带配色**，只把 DSH 主题 token 映射成 M3 角色名，于是能跟着用户换的主题走：
+
+```
+--ltk-surface:    var(--dsw-alias-bg-layer-1, #15191e)
+--ltk-sc-low:     var(--dsw-alias-bg-base,    …)
+--ltk-on-surface: var(--dsw-alias-label-primary, …)
+--ltk-outline:    var(--dsw-alias-border-l2,  …)
+--ltk-primary:    var(--dsw-alias-brand-primary, …)
+```
+
+每个 `var()` 都带兜底值，所以拿不到 DSH token 时（比如在别的宿主里）也不会变成透明。
+样式只注入一次（`<style id="lan-tasks-md3">`；`ensureStyle()` 用 `styleDone` 去重，
+拿不到 `document`、或它没有 `head`/`body` 时安静跳过 —— 离线冒烟就是这么跑的）。
+留在内联样式里的只有动态值：状态点颜色、二维码宽高与 `imageRendering`、浮层根的 `pointerEvents`。
+
+### 5.3 无障碍与系统偏好
+
+`:focus-visible` 给 2px primary 焦点环；`@media (prefers-reduced-motion: reduce)` 关掉全部动画与过渡；
+手机页面用 `@media (prefers-color-scheme: light)` 提供整套浅色取值并切 `color-scheme`，
+所以在 iOS/Android 浅色模式下不会出现白底配深色文字的错色。
+
+## 6. 数据来源（读的部分；写只有 `POST /api/send` 一个口）
 
 - `agents.list()` / `agents.roots()` — 活着的会话与 Agent
 - `sessions.list()` — 每个会话的 `SessionHeader`（cwd、父子关系、委派深度）
@@ -154,7 +211,7 @@ maxImages: 4           # 一条消息最多几张图
 - `goals.get(rootAgent)` — 当前目标与进度
 - 事件：`session/event`、`agent/status`、`subagent/start|end`
 
-## 6. 安装方式
+## 7. 安装方式
 
 DSH 的插件注册 = 包自带 `cordis.patch.yml` + 包名列进 profile 的 `dsh.profile.bundles`
 + 包本体出现在 `profiles/desktop/node_modules/`。
@@ -202,9 +259,9 @@ $env:LAN_TASKS_PROFILE='C:\Users\你\.dsh\profiles\desktop'; node install-lan-ta
 **没有跑 `pnpm install`**：纯增量的 `link:` 依赖不需要动 lockfile，而这台机器上 pnpm
 有过多次 registry 超时记录。事后确认插件正常加载。
 
-## 7. 验证
+## 8. 验证
 
-### 7.1 宿主侧冒烟（`smoke-lan-tasks.mjs`）
+### 8.1 宿主侧冒烟（`smoke-lan-tasks.mjs`）
 
 用假 ctx 把**真插件**跑起来，覆盖 HTTP 层、快照组装、任务过滤/排序、SSE、鉴权、404/405，
 桌面面板的宿主侧（三条路由的注册、状态 JSON、二维码 SVG 与 `qrSvg()` 逐字节一致、索引越界回退、
@@ -222,18 +279,21 @@ $env:SMOKE_NO_WEB='1'; node smoke-lan-tasks.mjs 8803          # 宿主没有 web
 `mate` 的日志推断与 controller 结论相反，确认快照听的是 controller），
 没有时回退到日志推断并在 `notes` 里给出提示。
 
-### 7.2 客户端插件冒烟（`smoke-client.mjs`）
+### 8.2 客户端插件冒烟（`smoke-client.mjs`）
 
 `node:vm` 把 `client.js` 当普通脚本加载，喂一个假 `__ModuleLoader__`、一个迷你 React
 （`useState` 跨渲染持久化、`useEffect` 同步执行）和一个假 `fetch`，断言：加载器契约、
 三个槽的注册项、渲染出的二维码/统计/按钮、多网卡切换、复制按钮、窄栏图标按钮、
-浮层的开关与 Esc、接口挂掉时的降级与「迟到的成功不许盖掉新结果」。
+浮层的开关与 Esc、接口挂掉时的降级与「迟到的成功不许盖掉新结果」，
+以及 v1.4.0 的外观契约：MD3 样式表恰好注入一次（`id="lan-tasks-md3"`）、
+颜色角色取自 `--dsw-alias-*`、圆角与弹簧曲线在位、`prefers-reduced-motion` 降级在位、
+面板走 class 而不是内联样式。
 
 ```
-node smoke-client.mjs                             # 48 项断言  PASS
+node smoke-client.mjs                             # 54 项断言  PASS
 ```
 
-### 7.3 二维码真的能扫吗（用 OpenCV 独立解码）
+### 8.3 二维码真的能扫吗（用 OpenCV 独立解码）
 
 自己写的编码器不能自己证明自己对，所以用**另一个实现**解码：PIL 把 SVG/字符画栅格化，
 交给 `cv2.QRCodeDetector` 认。
@@ -250,13 +310,16 @@ D:\tool\python\python.exe "$env:TEMP\lan-tasks-qr-verify\verify_served.py" "$env
 SVG 与字符画还原出的是同一张矩阵。`qrcode.js` 自己的 5 个样本（含 106 字节的 v5 上限）
 也是同样的三步验证，另外对过 ISO/IEC 18004 附录 A 的生成多项式。
 
-### 7.4 手机页面冒烟（`smoke-page.mjs`）
+### 8.4 手机页面冒烟（`smoke-page.mjs`）
 
 页面脚本本身也要能测：`node:vm` 里搭一个假 DOM（`getElementById` / `innerHTML` /
 `document.addEventListener`）、假 `FileReader`（回一段 data URL）、假 `Image` + 假 canvas
 （固定输出一段 base64），然后让它用**真的 `fetch`** 打到同进程里跑起来的插件实例上 ——
 从「点一下会话」到「服务端到底收到了什么」整条链路都覆盖：
 
+- 抓服务端渲染出来的 HTML 本身，确认皮肤是 MD3：颜色角色（`--md-primary:#b9c8ff`、
+  `--md-on-surface:#e3e2e6`、`--md-error:#ffb4ab`）、形状阶、弹簧曲线与 `ltSheetIn`、
+  浅色主题块、`prefers-reduced-motion` 降级、主题色与图标的新配色都在。
 - 列表条目可点（`data-act="open"` + `data-sid`）；点一下只发**一次** `/api/session`，
   带 `credentials` / `cache` 约束；浮层、标题、状态行、时间线（user / assistant / tool / err 行、
   「bash pnpm install」、错误文案）、`/api/image` 缩略图都对得上。
@@ -268,12 +331,12 @@ SVG 与字符画还原出的是同一张矩阵。`qrcode.js` 自己的 5 个样�
 - 带 `token` 的实例：所有请求（含 `POST /api/send`）都带 `?k=`，并且真的能读能发。
 
 ```
-node smoke-page.mjs 8879                          # 52 项断言  PASS
+node smoke-page.mjs 8879                          # 58 项断言  PASS
 ```
 
-这几套加起来 321 项断言（83 + 68 + 70 + 48 + 52，宿主侧的三个数字是同一套断言在三种降级路径下的重复计数）。
+这几套加起来 333 项断言（83 + 68 + 70 + 54 + 58，宿主侧的三个数字是同一套断言在三种降级路径下的重复计数）。
 
-## 8. 已知限制
+## 9. 已知限制
 
 - **改代码不会热重载。** DSH 的 `hmr` 服务不监听这个插件的源码文件（实测：改版本号后
   10 秒 `/healthz` 仍返回旧版本）。Node 的 ESM 模块缓存按 URL 缓存，所以
@@ -283,6 +346,11 @@ node smoke-page.mjs 8879                          # 52 项断言  PASS
   `apply()` 里注册的。重启之前只有 8791 那个手机页面在跑。
 - 二维码只支持到版本 5（106 字节）。带 `token` 的 URL 太长会超限，此时
   `/lan-tasks/qr.svg` 返回 500 并在正文里说明原因（面板上显示的是错误文案，不是空白）。
+- **换皮肤同样要重启 DSH**：样式常量写在 `page.js` / `client.js` 里，ESM 按 URL 缓存模块，
+  改完不重启看到的还是旧皮肤（实测：磁盘 42,025 字节的新页面，进程里仍旧吐 35,017 字节的旧页）。
+- 桌面面板只借 M3 的形状/动效，配色跟随 DSH 主题；如果 DSH 换了主题 token 名，
+  面板会回退到 `var()` 里的兜底色，不会变透明（但会跟主题不同色）。
+- 手机页面的浅色模式跟系统走（`prefers-color-scheme`），页面上没有手动切换开关。
 - **发消息 = 把 agent 的输入框放到局域网里**：`allowSend` 默认开，同网段谁能打开页面谁就能让
   agent 干活。公用网络请设 `token` 或 `allowSend: false`（详见第 4 节末尾）。
 - 图片：单张 ≤ `maxImageBytes`（默认 6 MB，按解码后字节算）、一条消息 ≤ `maxImages`（默认 4 张），

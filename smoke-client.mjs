@@ -208,7 +208,7 @@ const buttonWith = (node, label) => find(node, (el) => el.type === 'button' && t
 const payload = {
   ok: true,
   name: 'dsh-lan-tasks',
-  version: '1.2.0',
+  version: pkg.version,
   listening: true,
   port: 8791,
   host: '0.0.0.0',
@@ -253,7 +253,7 @@ check('渲染出二维码图片', images.length === 1 && images[0].props.src ===
 check('二维码图片可访问性描述带地址', !!images[0] && String(images[0].props.alt).includes('192.168.1.32'), images[0] && images[0].props.alt)
 check('图片有显式尺寸（不跳版）', !!images[0] && images[0].props.width === images[0].props.height && images[0].props.width > 100, images[0] && String(images[0].props.width))
 check('显示完整入口 URL', text.includes('http://192.168.1.32:8791/'), text.slice(0, 120))
-check('状态行带版本与端口', text.includes('dsh-lan-tasks v1.2.0') && text.includes('端口 8791'))
+check('状态行带版本与端口', text.includes(`dsh-lan-tasks v${pkg.version}`) && text.includes('端口 8791'))
 check('统计六项都在', ['会话', '运行中', '任务', '进行中', '已完成', '作业'].every((label) => text.includes(label)))
 check('统计数值来自接口', text.includes('2 会话') && text.includes('2 进行中') && text.includes('1 已完成') && text.includes('3 作业'), text.replace(/\s+/g, ' ').slice(0, 200))
 check('宿主提示原样显示', text.includes('运行状态取自 sessionController'))

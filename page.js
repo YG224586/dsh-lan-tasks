@@ -92,6 +92,57 @@ h2::after{content:"";flex:1;height:1px;background:var(--line)}
 .foot{text-align:center;color:var(--dim2);font-size:11px;padding:4px 0 0;line-height:1.6}
 .bar{height:4px;background:var(--card2);border-radius:999px;overflow:hidden;margin-top:9px}
 .bar i{display:block;height:100%;background:var(--done);border-radius:999px;transition:width .3s}
+
+/* ── 可点的会话条目 ── */
+.item.tap{cursor:pointer;transition:background .15s}
+.item.tap:active{background:var(--card2)}
+.chev{color:var(--dim2);font-size:18px;line-height:1;flex:none;padding-top:2px}
+.hint{font-size:11px;color:var(--dim2);font-weight:500}
+
+/* ── 会话详情（整屏浮层） ── */
+.sheet{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;flex-direction:column}
+.sheetHead{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;
+  background:rgba(11,15,20,.96);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.back{display:flex;align-items:center;gap:5px;background:var(--card2);border:1px solid var(--line);color:var(--fg);
+  border-radius:9px;padding:6px 11px;font-size:13px;font-weight:600;cursor:pointer}
+.sheetTitle{flex:1;min-width:0}
+.sheetTitle .t1{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheetTitle .t2{font-size:11px;color:var(--dim2);font-variant-numeric:tabular-nums;margin-top:2px}
+.timeline{flex:1;overflow-y:auto;padding:12px 12px 4px;-webkit-overflow-scrolling:touch}
+.msg{margin-bottom:11px;display:flex;flex-direction:column}
+.msg .bub{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:10px 12px;
+  font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.msg.user .bub{background:#1d2b3f;border-color:#2c4058}
+.msg.err .bub{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.35);color:#ffd7d7}
+.msg.sys{margin:4px 0 9px;text-align:center}
+.msg.sys .bub{display:inline-block;background:transparent;border:0;color:var(--dim2);font-size:11.5px;padding:2px 8px}
+.msg.tool .bub{background:transparent;border:0;color:#bfe9d2;font-size:12px;padding:0 2px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.msg .who{font-size:11px;color:var(--dim2);margin:0 2px 4px}
+.msg .imgs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.msg .imgs img{width:104px;height:104px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--card2)}
+.more{align-self:center;margin:2px 0 14px;font-size:12px;color:var(--dim2)}
+
+/* ── 输入区 ── */
+.composer{border-top:1px solid var(--line);background:var(--card);padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.chip{position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.chip img{width:100%;height:100%;object-fit:cover;display:block}
+.chip b{position:absolute;top:0;right:0;background:rgba(11,15,20,.85);color:var(--fg);font-size:12px;
+  width:20px;height:20px;line-height:20px;text-align:center;border-bottom-left-radius:8px;cursor:pointer;font-weight:400}
+.ta{width:100%;min-height:62px;max-height:180px;resize:none;background:var(--card2);color:var(--fg);
+  border:1px solid var(--line);border-radius:11px;padding:10px 12px;font:15px/1.5 inherit;outline:none}
+.ta:focus{border-color:var(--done)}
+.crow{display:flex;align-items:center;gap:9px;margin-top:9px}
+.iconBtn{display:inline-flex;align-items:center;gap:5px;background:var(--card2);border:1px solid var(--line);
+  color:var(--dim);border-radius:9px;padding:8px 11px;font-size:13px;cursor:pointer}
+#pick{display:none}
+.sendBtn{background:var(--done);border:0;color:#08111c;border-radius:10px;padding:9px 17px;font-size:14px;
+  font-weight:650;cursor:pointer}
+.sendBtn[disabled]{opacity:.5;cursor:default}
+.sendInfo{font-size:11.5px;color:var(--dim2);text-align:right;line-height:1.35}
+.sendInfo.bad{color:var(--err)}
+.sendInfo.good{color:var(--run)}
 `;
 
 const JS = String.raw`
@@ -229,9 +280,11 @@ function render(s){
   if (s.agents && s.agents.length){
     var ai = s.agents.map(function(a){
       var p = a.running ? pill('运行中','run') : pill('空闲','idle');
-      return '<div class="item '+(a.running?'st-run':'')+'">'+
-        '<div class="row"><div class="ttl">'+esc(a.title || ('会话 '+shortId(a.id)))+'</div>'+p+'</div>'+
+      return '<div class="item tap '+(a.running?'st-run':'')+'" data-act="open" data-sid="'+esc(a.id)+'">'+
+        '<div class="row"><div class="ttl">'+esc(a.title || ('会话 '+shortId(a.id)))+'</div>'+p+
+          '<span class="chev">›</span></div>'+
         (a.action ? '<div class="desc mono">执行中：'+esc(a.action.name)+' '+esc(a.action.brief||'')+'</div>' : '')+
+        (a.last ? '<div class="desc">'+(a.lastKind==='user'?'你：':'助手：')+esc(a.last)+'</div>' : '')+
         '<div class="tags">'+
           '<span class="tag mono">'+esc(shortId(a.id))+'</span>'+
           (a.kind==='sub' ? '<span class="tag">子代理 L'+esc(a.depth||0)+'</span>' : '<span class="tag">主会话</span>')+
@@ -240,7 +293,7 @@ function render(s){
           '<span class="tag">'+esc(ago(a.updatedAt))+'</span>'+
         '</div></div>';
     }).join('');
-    out.push(section('会话 / 代理', s.agents.length, '<div class="list">'+ai+'</div>'));
+    out.push(section('会话 / 代理', s.agents.length + ' · 点一下看详情', '<div class="list">'+ai+'</div>'));
   }
 
   /* ── 后台作业 ── */
@@ -286,6 +339,8 @@ function render(s){
   d.className = 'dot ' + (busy.length ? 'on' : '');
   document.getElementById('link').textContent = '实时连接';
   document.getElementById('clock').textContent = hhmmss(s.now);
+
+  renderSheet();
 }
 
 function goalPct(g){
@@ -309,6 +364,19 @@ function fmtK(n){
 
 /* ── 取数据：优先 SSE，连不上就退回轮询 ── */
 function qs(){ return location.search || '' }
+
+/* 所有接口都要带上口令（?k=…），不然开了 token 就全 401 */
+function api(path, params){
+  var parts = [];
+  if (params) for (var k in params){
+    if (!Object.prototype.hasOwnProperty.call(params, k)) continue;
+    if (params[k] === undefined || params[k] === null || params[k] === '') continue;
+    parts.push(encodeURIComponent(k)+'='+encodeURIComponent(params[k]));
+  }
+  var keep = String(location.search||'').replace(/^\?/,'');
+  if (keep) parts.push(keep);
+  return path + (parts.length ? '?'+parts.join('&') : '');
+}
 
 function startPoll(){
   if (poll) return;
@@ -343,6 +411,307 @@ function startSse(){
     fail();
     /* EventSource 自己会重连；这里只在连续失败时补一个轮询兜底 */
   };
+}
+
+/* ── 会话详情：点进去看历史，还能发消息 / 发图片 ── */
+var DETAIL_LIMIT = 80, IMG_MAX_EDGE = 1600, IMG_QUALITY = 0.85;
+var view = {
+  sid:'', open:false, detail:null, error:'', busy:false, at:0, lastTry:0,
+  draft:'', images:[], sending:false, sendError:'', pickNote:'', sent:''
+};
+
+function openSession(id){
+  if (!id) return;
+  view.sid = String(id); view.open = true; view.detail = null; view.error = '';
+  view.draft = ''; view.images = []; view.sendError = ''; view.pickNote = ''; view.sent = '';
+  view.at = 0; view.lastTry = Date.now();   /* 现在就标记「刚请求过」，免得 renderSheet 又发一次一样的请求 */
+  renderSheet(true);
+  refreshDetail();
+}
+
+function closeSession(){
+  view.open = false; view.sid = ''; view.detail = null;
+  view.draft = ''; view.images = []; view.sendError = ''; view.pickNote = ''; view.sent = '';
+  renderSheet(true);
+}
+
+function refreshDetail(){
+  if (!view.open || !view.sid) return;
+  var sid = view.sid;
+  view.busy = true; view.lastTry = Date.now();
+  fetch(api('/api/session', { id: sid, limit: DETAIL_LIMIT }), { cache:'no-store', credentials:'same-origin' })
+    .then(function(r){
+      return r.json().then(function(b){ return { ok:r.ok, status:r.status, body:b } },
+                            function(){ return { ok:false, status:r.status, body:null } });
+    })
+    .then(function(res){
+      if (view.sid !== sid) return;
+      view.busy = false;
+      if (res.ok && res.body && res.body.ok){ view.detail = res.body; view.error = ''; view.at = Date.now() }
+      else view.error = (res.body && res.body.error) || ('读取失败：HTTP '+res.status);
+      renderSheet();
+    })
+    .catch(function(e){
+      if (view.sid !== sid) return;
+      view.busy = false;
+      view.error = '读取失败：' + ((e && e.message) || e);
+      renderSheet();
+    });
+}
+
+function recordHtml(r){
+  var kind = String(r.kind || 'assistant');
+  var who = r.who && kind !== 'tool' && kind !== 'sys'
+    ? '<div class="who">'+esc(r.who)+(r.at ? ' · '+esc(hhmmss(r.at)) : '')+'</div>' : '';
+  var body = kind === 'tool'
+    ? esc(String(r.who||'工具') + (r.brief ? ' '+r.brief : ''))
+    : esc(r.text||'');
+  var imgs = (r.images||[]).map(function(im){
+    return '<a href="'+esc(im.url)+'" target="_blank" rel="noreferrer">'+
+      '<img src="'+esc(im.url)+'" alt="'+esc(im.name||'图片')+'" loading="lazy"></a>';
+  }).join('');
+  return '<div class="msg '+esc(kind)+'">'+who+'<div class="bub">'+body+
+    (imgs ? '<div class="imgs">'+imgs+'</div>' : '')+'</div></div>';
+}
+
+function detailSub(d){
+  if (!d) return view.error ? '读取失败' : '读取中…';
+  var bits = [d.running ? '运行中' : '空闲'];
+  if (d.turns) bits.push(d.turns+' 轮');
+  if (d.errors) bits.push(d.errors+' 次出错');
+  bits.push(d.source === 'live' ? '实时日志' : d.source === 'inspect' ? '历史日志' : '无日志');
+  if (d.count) bits.push(d.count+' 条');
+  return bits.join(' · ');
+}
+
+function composerInfo(d){
+  if (!d) return '读会话中…';
+  if (!d.allowSend) return '这台机器关掉了手机端发送';
+  if (!d.canSend) return '宿主没有会话服务，暂时发不了';
+  var left = Math.max(0, (d.maxImages||4) - view.images.length);
+  return '还能加 '+left+' 张图，单张 ≤ '+fmtK(d.maxImageBytes||0)+'B';
+}
+
+function composerHtml(d){
+  var canSend = !!(d && d.canSend);
+  var chips = view.images.map(function(im, i){
+    return '<div class="chip"><img src="'+esc(im.url)+'" alt="">'+
+      '<b data-act="drop" data-i="'+i+'">×</b></div>';
+  }).join('');
+  var note = view.sendError ? '<div class="sendInfo bad">'+esc(view.sendError)+'</div>'
+           : view.pickNote ? '<div class="sendInfo bad">'+esc(view.pickNote)+'</div>'
+           : view.sent ? '<div class="sendInfo good">'+esc(view.sent)+'</div>' : '';
+  return '<div class="composer">'+
+    (chips ? '<div class="chips">'+chips+'</div>' : '') + note +
+    '<textarea id="draft" class="ta" placeholder="'+esc(canSend ? '说点什么…' : '当前不能发送')+'"'+
+      (canSend ? '' : ' disabled')+'>'+esc(view.draft)+'</textarea>'+
+    '<div class="crow">'+
+      '<label class="iconBtn" for="pick">📷 图片</label>'+
+      '<input id="pick" type="file" accept="image/*" multiple'+(canSend ? '' : ' disabled')+'>'+
+      '<span class="sendInfo">'+esc(composerInfo(d))+'</span>'+
+      '<button class="sendBtn" data-act="send"'+(!canSend || view.sending ? ' disabled' : '')+'>'+
+        (view.sending ? '发送中…' : '发送')+'</button>'+
+    '</div></div>';
+}
+
+function sheetHtml(){
+  var d = view.detail;
+  var title = (d && d.title) || (view.sid ? '会话 '+shortId(view.sid) : '会话');
+  var rows = d ? (d.records||[]).map(recordHtml).join('') : '';
+  if (d && !rows) rows = '<div class="msg sys"><div class="bub">这个会话还没有可显示的消息</div></div>';
+  if (!d) rows = '<div class="msg sys"><div class="bub">'+esc(view.error || '正在读取会话…')+'</div></div>';
+  return '<div class="sheetHead">'+
+      '<button class="back" data-act="close">‹ 返回</button>'+
+      '<div class="sheetTitle"><div class="t1">'+esc(title)+'</div>'+
+        '<div class="t2">'+esc(shortId(view.sid))+' · '+esc(detailSub(d))+'</div></div>'+
+    '</div>'+
+    (d && d.hasMore ? '<div class="more">只显示了最近 '+esc(String(d.count||0))+' 条</div>' : '')+
+    '<div class="timeline">'+rows+'</div>'+
+    composerHtml(d);
+}
+
+function renderSheet(force){
+  if (typeof document === 'undefined') return;
+  var el = document.getElementById('sheet');
+  if (!el) return;
+  if (!view.open || !view.sid){ el.style.display = 'none'; el.innerHTML = ''; return }
+
+  /* 正在打字就别重画，免得光标乱跳 */
+  var active = document.activeElement;
+  if (!force && el.innerHTML && active && active.id === 'draft') return;
+
+  var box = typeof el.querySelector === 'function' ? el.querySelector('.timeline') : null;
+  var stick = true;
+  if (box && typeof box.scrollHeight === 'number' && typeof box.clientHeight === 'number'){
+    stick = (box.scrollHeight - box.scrollTop - box.clientHeight) < 90;
+  }
+
+  el.style.display = 'flex';
+  el.innerHTML = sheetHtml();
+
+  var next = typeof el.querySelector === 'function' ? el.querySelector('.timeline') : null;
+  if (next && stick && typeof next.scrollHeight === 'number') next.scrollTop = next.scrollHeight;
+
+  /* 跟着看板一起刷新（SSE 每两秒来一次，这里做节流） */
+  if (!view.busy && Date.now() - Math.max(view.at, view.lastTry) > 2500) refreshDetail();
+}
+
+/* ── 传图：太大先在本地缩一缩，省得白传 ── */
+function pickImages(files){
+  var list = [];
+  try { list = Array.prototype.slice.call(files || []) } catch(e){ list = [] }
+  if (!list.length) return;
+  var cap = (view.detail && view.detail.maxImages) || 4;
+  var room = cap - view.images.length;
+  if (room <= 0){ view.sendError = '图片最多 '+cap+' 张'; renderSheet(true); return }
+  view.sendError = ''; view.pickNote = ''; view.sent = '';
+  for (var i = 0; i < list.length && i < room; i++) readImage(list[i]);
+  /* 单独一个字段：读图是异步的，addImage 成功后会清 sendError，别把这条提示一起抹掉 */
+  if (list.length > room) view.pickNote = '只收了前 '+room+' 张（上限 '+cap+' 张）';
+  renderSheet(true);
+}
+
+function readImage(file){
+  if (!file) return;
+  var type = String(file.type||'').toLowerCase();
+  if (type.indexOf('image/') !== 0){ view.sendError = '只能选图片'; renderSheet(true); return }
+  if (typeof FileReader === 'undefined'){ view.sendError = '这个浏览器读不了本地文件'; renderSheet(true); return }
+  var reader = new FileReader();
+  reader.onload = function(){ shrinkImage(String(reader.result||''), type, String(file.name||'')) };
+  reader.onerror = function(){ view.sendError = '图片读取失败'; renderSheet(true) };
+  try { reader.readAsDataURL(file) } catch(e){ view.sendError = '图片读取失败'; renderSheet(true) }
+}
+
+function shrinkImage(dataUrl, type, name){
+  var cut = dataUrl.indexOf(',');
+  var raw = cut >= 0 ? dataUrl.slice(cut+1) : '';
+  if (!raw){ view.sendError = '图片是空的'; renderSheet(true); return }
+  var keepRaw = function(){ addImage(type, raw, name) };
+  if (type === 'image/gif') return keepRaw();   /* 动图缩了就不动了 */
+  try {
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') return keepRaw();
+    if (typeof Image === 'undefined') return keepRaw();
+    var canvas = document.createElement('canvas');
+    if (!canvas || typeof canvas.getContext !== 'function') return keepRaw();
+    var context = canvas.getContext('2d');
+    if (!context) return keepRaw();
+    var img = new Image();
+    img.onerror = keepRaw;
+    img.onload = function(){
+      try {
+        var w = Number(img.width)||0, h = Number(img.height)||0;
+        var box = Math.max(w, h);
+        var scale = box > IMG_MAX_EDGE ? IMG_MAX_EDGE / box : 1;
+        canvas.width = Math.max(1, Math.round(w*scale));
+        canvas.height = Math.max(1, Math.round(h*scale));
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        var out = canvas.toDataURL('image/jpeg', IMG_QUALITY);
+        if (!out || out.indexOf(',') < 0) return keepRaw();
+        addImage('image/jpeg', out.slice(out.indexOf(',')+1), name);
+      } catch(e){ keepRaw() }
+    };
+    img.src = dataUrl;
+  } catch(e){ keepRaw() }
+}
+
+function bytesOf(data){ return Math.floor(String(data||'').length * 3 / 4) }
+
+function addImage(mediaType, data, name){
+  var cap = (view.detail && view.detail.maxImages) || 4;
+  var limit = (view.detail && view.detail.maxImageBytes) || 6291456;
+  if (view.images.length >= cap){ view.sendError = '图片最多 '+cap+' 张'; renderSheet(true); return }
+  var bytes = bytesOf(data);
+  if (bytes > limit){ view.sendError = '这张图 '+fmtK(bytes)+'B，超过单张上限 '+fmtK(limit)+'B'; renderSheet(true); return }
+  view.images.push({ mediaType: mediaType, data: data, name: name||'', bytes: bytes,
+    url: 'data:'+mediaType+';base64,'+data });
+  view.sendError = ''; view.sent = '';
+  renderSheet(true);
+}
+
+/* ── 发送：走宿主的 POST /api/send，等于在桌面输入框敲一句话 ── */
+function sendMessage(){
+  if (view.sending) return;
+  var d = view.detail;
+  if (!d || !d.canSend){ view.sendError = '当前不能发送'; renderSheet(true); return }
+  var text = String(view.draft||'');
+  if (!text.trim() && !view.images.length){ view.sendError = '写点字，或者选一张图'; renderSheet(true); return }
+
+  var body = { sessionId: view.sid, text: text, mode: 'queue', images: [] };
+  try { body.tz = Intl.DateTimeFormat().resolvedOptions().timeZone } catch(e){}
+  for (var i = 0; i < view.images.length; i++){
+    body.images.push({ mediaType: view.images[i].mediaType, data: view.images[i].data, name: view.images[i].name });
+  }
+
+  view.sending = true; view.sendError = ''; view.sent = '';
+  renderSheet(true);
+
+  fetch(api('/api/send'), {
+    method: 'POST', cache: 'no-store', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+    .then(function(r){
+      return r.json().then(function(b){ return { status:r.status, body:b } },
+                            function(){ return { status:r.status, body:null } });
+    })
+    .then(function(res){
+      view.sending = false;
+      if (res.status < 400 && res.body && res.body.ok){
+        view.draft = ''; view.images = []; view.pickNote = ''; view.sent = '已发送（' + String(res.body.mode||'queue') + '）';
+        var ta = document.getElementById('draft');
+        if (ta) ta.value = '';
+        refreshDetail();
+      } else {
+        view.sendError = (res.body && res.body.error) || ('发送失败：HTTP '+res.status);
+      }
+      renderSheet(true);
+    })
+    .catch(function(e){
+      view.sending = false;
+      view.sendError = '发送失败：' + ((e && e.message) || e);
+      renderSheet(true);
+    });
+}
+
+/* ── 事件委托：列表点进会话、关闭、发送、删图、选图、草稿 ── */
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function'){
+  document.addEventListener('click', function(e){
+    var node = e.target;
+    while (node && node !== document){
+      if (typeof node.getAttribute === 'function'){
+        var act = node.getAttribute('data-act');
+        if (act){
+          if (act === 'open') openSession(node.getAttribute('data-sid'));
+          else if (act === 'close') closeSession();
+          else if (act === 'send') sendMessage();
+          else if (act === 'drop'){
+            var i = Number(node.getAttribute('data-i'));
+            if (!isNaN(i)) view.images.splice(i, 1);
+            renderSheet(true);
+          }
+          if (e.preventDefault) e.preventDefault();
+          return;
+        }
+      }
+      node = node.parentNode;
+    }
+  });
+  document.addEventListener('change', function(e){
+    var t = e.target;
+    if (t && t.id === 'pick' && t.files) pickImages(t.files);
+  });
+  document.addEventListener('input', function(e){
+    var t = e.target;
+    if (t && t.id === 'draft') view.draft = String(t.value||'');
+  });
+  document.addEventListener('keydown', function(e){
+    if (e && e.key === 'Escape' && view.open) closeSession();
+  });
+}
+
+if (typeof window !== 'undefined'){
+  window.__lan = { open: openSession, close: closeSession, send: sendMessage, pick: pickImages,
+    refresh: refreshDetail, render: render, renderSheet: renderSheet, state: view, api: api };
 }
 
 document.addEventListener('visibilitychange', function(){
@@ -381,6 +750,7 @@ export function renderPage(meta) {
   <div class="meta"><span id="clock">--:--:--</span><br><span id="link">连接中…</span></div>
 </header>
 <main id="app"><div class="empty">正在读取状态…</div></main>
+<div id="sheet" class="sheet" style="display:none"></div>
 <script>${JS}</script>
 </body>
 </html>`

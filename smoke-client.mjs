@@ -75,6 +75,7 @@ const React = {
 
 const intervals = []
 const listeners = new Map()
+const appended = []
 const clipboard = { text: '', writeText: async (value) => { clipboard.text = value } }
 
 const sandbox = {
@@ -90,8 +91,8 @@ const sandbox = {
   document: {
     addEventListener: (type, fn) => listeners.set(type, fn),
     removeEventListener: (type) => listeners.delete(type),
-    createElement: () => ({ style: {}, setAttribute() {}, select() {} }),
-    body: { appendChild() {}, removeChild() {} },
+    createElement: (tag) => ({ tag, style: {}, setAttribute() {}, select() {} }),
+    body: { appendChild: (node) => appended.push(node), removeChild() {} },
     execCommand: () => false,
   },
   navigator: { clipboard },
@@ -333,8 +334,24 @@ await buttonWith(render(SettingsSection, {}), '刷新').props.onClick()
 await tick()
 check('HTTP 错误也算失败', textOf(render(SettingsSection, {})).includes('HTTP 500'))
 
-/* ── 包清单：客户端插件必需的字段 ── */
+/* ── MD3 Expressive 样式表：注入一次、颜色走宿主 token ── */
 
+const styles = appended.filter((node) => node.id === 'lan-tasks-md3')
+check('注入了 MD3 样式表', styles.length === 1, `styles=${styles.length}`)
+const css = styles.length ? String(styles[0].textContent) : ''
+check('样式表只注入一次', styles.length === 1)
+check(
+  '颜色角色取自宿主主题 token',
+  css.includes('--ltk-primary:var(--dsw-alias-brand-primary') &&
+    css.includes('--ltk-on-surface:var(--dsw-alias-label-primary') &&
+    css.includes('--ltk-outline-variant:var(--dsw-alias-border-l1'),
+  '',
+)
+check('带 M3 形状阶与弹簧动效', css.includes('--ltk-r-2xl:28px') && css.includes('--ltk-spring:cubic-bezier(.34,1.56,.64,1)'))
+check('带 reduced-motion 降级', css.includes('prefers-reduced-motion:reduce'))
+check('面板用 class 而不是内联样式', byType(tree, 'section')[0].props.className.includes('ltk-card') && !byType(tree, 'section')[0].props.style)
+
+/* ── 包清单：客户端插件必需的字段 ── */
 check('版本号与包清单一致', payload.version === pkg.version, `${payload.version} vs ${pkg.version}`)
 check(
   '清单声明了 web 客户端插件',

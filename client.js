@@ -8,6 +8,13 @@
  *
  * 数据从宿主的 /lan-tasks/state 拿（同源，Host 半边注册的路由），
  * 二维码直接 `<img src="/lan-tasks/qr.svg?i=N">`，编码在 Host 侧做，浏览器里不塞编码器。
+ *
+ * 样式：MD3 Expressive（Material Design 3 Expressive）——
+ *   · 颜色仍取 DSH 主题 token（--dsw-alias-*），只是重新映射成 M3 角色
+ *     （surface / surface-container / on-surface / primary / outline…），
+ *     这样深浅色主题都跟着宿主走，不会在浅色主题里变成一块深色补丁；
+ *   · 形状阶、tonal 表面层级、弹簧动效、字阶按 M3 Expressive 来做。
+ *   样式表只注入一次（<style id="lan-tasks-md3">），组件本身只用 class。
  */
 window.__ModuleLoader__.load({
   id: '@local/dsh-lan-tasks',
@@ -18,20 +25,138 @@ window.__ModuleLoader__.load({
     const API = '/lan-tasks/state'
     const REFRESH_MS = 5000
 
-    /** 只用主题 token，深浅色主题都跟着走。 */
-    const T = {
-      layer1: 'var(--dsw-alias-bg-layer-1)',
-      layer2: 'var(--dsw-alias-bg-layer-2)',
-      bgBase: 'var(--dsw-alias-bg-base)',
-      border1: 'var(--dsw-alias-border-l1)',
-      border2: 'var(--dsw-alias-border-l2)',
-      brand: 'var(--dsw-alias-brand-primary)',
-      text1: 'var(--dsw-alias-label-primary)',
-      text2: 'var(--dsw-alias-label-secondary)',
-      ok: 'var(--dsw-alias-state-success-primary)',
-      warn: 'var(--dsw-alias-state-warn-primary)',
-      err: 'var(--dsw-alias-state-error-primary)',
-      idle: 'var(--dsw-alias-state-idle-primary)',
+    /* ────────────────────────── MD3 Expressive 样式表 ────────────────────────── */
+
+    const STYLE_ID = 'lan-tasks-md3'
+    const CSS = `
+.ltk{
+  /* M3 颜色角色 ← DSH 主题 token（token 缺失时用深色 M3 取值兜底） */
+  --ltk-surface:var(--dsw-alias-bg-layer-1,#15191e);
+  --ltk-sc-low:var(--dsw-alias-bg-base,#0f1216);
+  --ltk-sc:var(--dsw-alias-bg-layer-2,#1a1e24);
+  --ltk-sc-high:var(--dsw-alias-bg-layer-2,#242930);
+  --ltk-on-surface:var(--dsw-alias-label-primary,#e3e2e6);
+  --ltk-on-surface-variant:var(--dsw-alias-label-secondary,#c3c6cf);
+  --ltk-outline:var(--dsw-alias-border-l2,#8d9199);
+  --ltk-outline-variant:var(--dsw-alias-border-l1,#41454c);
+  --ltk-primary:var(--dsw-alias-brand-primary,#b9c8ff);
+  --ltk-primary-container:color-mix(in oklab,var(--dsw-alias-brand-primary,#b9c8ff) 22%,transparent);
+  --ltk-ok:var(--dsw-alias-state-success-primary,#7cd98f);
+  --ltk-warn:var(--dsw-alias-state-warn-primary,#ffcf8f);
+  --ltk-err:var(--dsw-alias-state-error-primary,#ffb4ab);
+  --ltk-idle:var(--dsw-alias-state-idle-primary,#8d9199);
+  /* M3 形状阶 */
+  --ltk-r-xs:4px; --ltk-r-sm:8px; --ltk-r-md:12px; --ltk-r-lg:16px; --ltk-r-xl:20px;
+  --ltk-r-2xl:28px; --ltk-r-full:999px;
+  /* M3 Expressive 动效 */
+  --ltk-spring:cubic-bezier(.34,1.56,.64,1);
+  --ltk-emph:cubic-bezier(.2,0,0,1);
+  --ltk-fast:180ms; --ltk-mid:280ms;
+}
+.ltk,.ltk *{box-sizing:border-box}
+
+/* 卡片 / 容器：用表面层级 + 大圆角做层次，不靠重投影 */
+.ltk-card{display:flex;flex-direction:column;gap:14px;padding:18px;border-radius:var(--ltk-r-2xl);
+  background:var(--ltk-sc-low);border:1px solid var(--ltk-outline-variant);color:var(--ltk-on-surface);
+  animation:ltkRise var(--ltk-mid) var(--ltk-emph) both}
+.ltk-panel{display:flex;flex-direction:column;gap:14px}
+.ltk-head{display:flex;align-items:center;gap:10px}
+.ltk-head h3{margin:0;font:600 15px/1.3 inherit;letter-spacing:.1px}
+.ltk-head .ltk-glyph{color:var(--ltk-primary);line-height:0}
+.ltk-head .ltk-hint{margin-left:auto;font:400 12px/1.5 inherit;color:var(--ltk-on-surface-variant)}
+
+/* 状态行 */
+.ltk-status{display:flex;align-items:center;gap:9px;font:400 13px/1.5 inherit;color:var(--ltk-on-surface-variant)}
+.ltk-dot{width:10px;height:10px;border-radius:var(--ltk-r-full);flex:0 0 auto;
+  transition:background var(--ltk-fast) var(--ltk-emph),box-shadow var(--ltk-fast) var(--ltk-emph)}
+.ltk-dot.ltk-live{animation:ltkPulse 2.6s var(--ltk-emph) infinite}
+
+/* 二维码：白底是扫码的硬要求，深色主题下也保持白 */
+.ltk-qrWrap{padding:12px;background:#fff;border-radius:var(--ltk-r-xl);
+  border:1px solid var(--ltk-outline-variant);line-height:0;
+  animation:ltkRise var(--ltk-mid) var(--ltk-emph) both}
+.ltk-qr{display:block;image-rendering:pixelated}
+
+.ltk-split{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.ltk-col{display:flex;flex-direction:column;gap:10px;min-width:220px;flex:1 1 220px}
+.ltk-lead{font:400 13px/1.55 inherit;color:var(--ltk-on-surface)}
+.ltk-url{display:block;padding:10px 12px;border-radius:var(--ltk-r-lg);background:var(--ltk-sc);
+  border:1px solid var(--ltk-outline-variant);color:var(--ltk-on-surface);
+  font:400 12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+  word-break:break-all;user-select:all}
+.ltk-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* 按钮：M3 tonal 药丸，按下回弹 */
+.ltk-btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 16px;
+  border:1px solid transparent;border-radius:var(--ltk-r-full);
+  background:var(--ltk-sc);color:var(--ltk-on-surface);
+  font:500 13px/1 inherit;cursor:pointer;text-decoration:none;
+  transition:transform var(--ltk-fast) var(--ltk-spring),background var(--ltk-fast) var(--ltk-emph)}
+.ltk-btn:hover{background:var(--ltk-sc-high)}
+.ltk-btn:active{transform:scale(.96)}
+.ltk-btn.ltk-on{background:var(--ltk-primary-container);color:var(--ltk-primary);border-color:var(--ltk-primary)}
+.ltk-btn.ltk-sm{height:28px;padding:0 12px;font:500 12px/1 inherit}
+.ltk-btn.ltk-icon{width:38px;height:38px;padding:0;justify-content:center;border-radius:var(--ltk-r-full)}
+.ltk-note{font:400 12px/1.55 inherit;color:var(--ltk-on-surface-variant)}
+
+/* 统计瓦片 */
+.ltk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px;
+  padding-top:14px;border-top:1px solid var(--ltk-outline-variant)}
+.ltk-stat{display:flex;flex-direction:column;gap:3px;padding:11px 13px;border-radius:var(--ltk-r-xl);
+  background:var(--ltk-sc);border:1px solid var(--ltk-outline-variant);
+  animation:ltkRise var(--ltk-mid) var(--ltk-emph) both}
+.ltk-stat b{font:600 20px/1.15 inherit;letter-spacing:-.3px;font-variant-numeric:tabular-nums}
+.ltk-stat span{font:400 12px/1.3 inherit;color:var(--ltk-on-surface-variant)}
+
+.ltk-notes{display:flex;flex-direction:column;gap:4px}
+.ltk-foot{font:400 12px/1.6 inherit;color:var(--ltk-on-surface-variant)}
+
+/* 侧栏底部按钮 */
+.ltk-footerBtn{display:inline-flex;align-items:center;gap:8px;height:38px;border-radius:var(--ltk-r-full);
+  border:1px solid transparent;background:transparent;color:var(--ltk-on-surface-variant);cursor:pointer;
+  font:500 13px/1 inherit;transition:background var(--ltk-fast) var(--ltk-emph),
+  color var(--ltk-fast) var(--ltk-emph),transform var(--ltk-fast) var(--ltk-spring)}
+.ltk-footerBtn:hover{background:var(--ltk-sc);color:var(--ltk-on-surface)}
+.ltk-footerBtn:active{transform:scale(.96)}
+.ltk-footerBtn.ltk-wide{width:100%;justify-content:flex-start;padding:0 12px}
+.ltk-footerBtn.ltk-narrow{width:38px;justify-content:center;padding:0}
+.ltk-footerBtn.ltk-open{background:var(--ltk-primary-container);color:var(--ltk-primary);border-color:var(--ltk-primary)}
+
+/* 浮层：整帧遮罩 + 圆角卡片 */
+.ltk-overlay{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  padding:20px;background:color-mix(in oklab,#000 55%,transparent);
+  backdrop-filter:blur(3px);animation:ltkFade var(--ltk-fast) var(--ltk-emph) both}
+.ltk-dialog{width:min(560px,100%);max-height:86vh;overflow:auto;padding:20px;
+  border-radius:var(--ltk-r-2xl);background:var(--ltk-surface);border:1px solid var(--ltk-outline-variant);
+  box-shadow:0 24px 60px color-mix(in oklab,#000 45%,transparent);
+  animation:ltkSheet var(--ltk-mid) var(--ltk-emph) both}
+
+@keyframes ltkRise{from{opacity:0;transform:translateY(9px) scale(.99)}to{opacity:1;transform:none}}
+@keyframes ltkFade{from{opacity:0}to{opacity:1}}
+@keyframes ltkSheet{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes ltkPulse{0%,100%{box-shadow:0 0 0 4px color-mix(in oklab,currentColor 26%,transparent)}
+  50%{box-shadow:0 0 0 7px color-mix(in oklab,currentColor 8%,transparent)}}
+
+@media (prefers-reduced-motion:reduce){.ltk,.ltk *{animation:none !important;transition:none !important}}
+`
+
+    let styleDone = false
+    /** 样式只注入一次；document 不在或没 head 时安静跳过（离线测试里就是这样）。 */
+    function ensureStyle() {
+      if (styleDone) return
+      styleDone = true
+      try {
+        if (typeof document === 'undefined' || !document || typeof document.createElement !== 'function') return
+        if (typeof document.getElementById === 'function' && document.getElementById(STYLE_ID)) return
+        const host = document.head || document.body
+        if (!host || typeof host.appendChild !== 'function') return
+        const el = document.createElement('style')
+        el.id = STYLE_ID
+        el.textContent = CSS
+        host.appendChild(el)
+      } catch {
+        /* 样式注入失败不该拖垮面板本身 */
+      }
     }
 
     /* ────────────────────────── 共享开关 ────────────────────────── */
@@ -137,20 +262,6 @@ window.__ModuleLoader__.load({
       )
     }
 
-    const buttonStyle = {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 6,
-      height: 30,
-      padding: '0 12px',
-      borderRadius: 8,
-      border: `1px solid ${T.border2}`,
-      background: T.layer2,
-      color: T.text1,
-      font: '13px/1 inherit',
-      cursor: 'pointer',
-    }
-
     function CopyButton(props) {
       const [done, setDone] = React.useState(false)
       const timer = React.useRef(0)
@@ -188,39 +299,45 @@ window.__ModuleLoader__.load({
         timer.current = setTimeout(() => setDone(false), 1600)
       }, [props.text])
 
-      return h('button', { type: 'button', onClick: copy, style: buttonStyle, title: '复制到剪贴板' }, done ? '已复制' : '复制链接')
+      return h(
+        'button',
+        { type: 'button', onClick: copy, className: 'ltk-btn', title: '复制到剪贴板' },
+        done ? '已复制' : '复制链接',
+      )
     }
 
     function Stat(props) {
       return h(
         'div',
-        { style: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 64 } },
-        h('span', { style: { font: '600 17px/1.2 inherit', color: T.text1 } }, String(props.value)),
-        h('span', { style: { font: '12px/1.2 inherit', color: T.text2 } }, props.label),
+        { className: 'ltk-stat' },
+        h('b', null, String(props.value)),
+        h('span', null, props.label),
       )
     }
 
     function StatusLine(props) {
       const data = props.data
-      const dot = { width: 8, height: 8, borderRadius: 4, background: T.idle, flex: '0 0 auto' }
-      if (props.error) {
-        dot.background = T.err
-      } else if (data && data.listening) {
-        dot.background = T.ok
-      } else if (data) {
-        dot.background = T.warn
-      } else {
-        dot.background = T.idle
-      }
+      let color = 'var(--ltk-idle)'
+      let live = false
+      if (props.error) color = 'var(--ltk-err)'
+      else if (data && data.listening) {
+        color = 'var(--ltk-ok)'
+        live = true
+      } else if (data) color = 'var(--ltk-warn)'
+
       let text
       if (props.error) text = `读不到面板数据：${props.error}`
       else if (!data) text = '正在读取…'
       else if (!data.listening) text = `Host 未监听端口 ${data.port}，看板暂时打不开`
       else text = `dsh-lan-tasks v${data.version} · 端口 ${data.port} · 手机同 Wi-Fi 可访问`
+
       return h(
         'div',
-        { style: { display: 'flex', alignItems: 'center', gap: 8, color: T.text2, font: '13px/1.5 inherit' } },
-        h('span', { style: dot }),
+        { className: 'ltk-status' },
+        h('span', {
+          className: live ? 'ltk-dot ltk-live' : 'ltk-dot',
+          style: { background: color, color },
+        }),
         h('span', null, text),
       )
     }
@@ -230,10 +347,8 @@ window.__ModuleLoader__.load({
       if (!notes.length) return null
       return h(
         'div',
-        { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-        notes.slice(0, 4).map((note, index) =>
-          h('div', { key: index, style: { font: '12px/1.5 inherit', color: T.text2 } }, `· ${note}`),
-        ),
+        { className: 'ltk-notes' },
+        notes.slice(0, 4).map((note, index) => h('div', { key: index, className: 'ltk-note' }, `· ${note}`)),
       )
     }
 
@@ -253,25 +368,18 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { style: { display: 'flex', flexDirection: 'column', gap: 14 } },
+        { className: 'ltk-panel' },
         h(StatusLine, { data, error: state.error }),
 
         addresses.length
           ? h(
               'div',
-              { style: { display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' } },
+              { className: 'ltk-split' },
               h(
                 'div',
-                {
-                  style: {
-                    padding: 10,
-                    background: '#ffffff',
-                    borderRadius: 10,
-                    border: `1px solid ${T.border1}`,
-                    lineHeight: 0,
-                  },
-                },
+                { className: 'ltk-qrWrap' },
                 h('img', {
+                  className: 'ltk-qr',
                   src: current.qr,
                   width: qrSize,
                   height: qrSize,
@@ -281,50 +389,30 @@ window.__ModuleLoader__.load({
               ),
               h(
                 'div',
-                { style: { display: 'flex', flexDirection: 'column', gap: 10, minWidth: 220, flex: '1 1 220px' } },
+                { className: 'ltk-col' },
+                h('div', { className: 'ltk-lead' }, '手机相机对着二维码扫一下，就能打开这块看板。'),
+                h('code', { className: 'ltk-url' }, current ? current.url : ''),
                 h(
                   'div',
-                  { style: { font: '13px/1.5 inherit', color: T.text1 } },
-                  '手机相机对着二维码扫一下，就能打开这块看板。',
-                ),
-                h(
-                  'code',
-                  {
-                    style: {
-                      display: 'block',
-                      padding: '8px 10px',
-                      borderRadius: 8,
-                      background: T.bgBase,
-                      border: `1px solid ${T.border1}`,
-                      color: T.text1,
-                      font: '12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace',
-                      wordBreak: 'break-all',
-                      userSelect: 'all',
-                    },
-                  },
-                  current ? current.url : '',
-                ),
-                h(
-                  'div',
-                  { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+                  { className: 'ltk-row' },
                   h(CopyButton, { text: current ? current.url : '' }),
                   h(
                     'a',
                     {
+                      className: 'ltk-btn',
                       href: current ? current.url : '#',
                       target: '_blank',
                       rel: 'noreferrer',
-                      style: Object.assign({}, buttonStyle, { textDecoration: 'none' }),
                     },
                     '在本机浏览器打开',
                   ),
-                  h('button', { type: 'button', onClick: () => void props.reload(), style: buttonStyle }, '刷新'),
+                  h('button', { type: 'button', className: 'ltk-btn', onClick: () => void props.reload() }, '刷新'),
                 ),
                 addresses.length > 1
                   ? h(
                       'div',
-                      { style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
-                      h('span', { style: { font: '12px/1.5 inherit', color: T.text2 } }, '换一张：'),
+                      { className: 'ltk-row' },
+                      h('span', { className: 'ltk-note' }, '换一张：'),
                       addresses.map((item, i) =>
                         h(
                           'button',
@@ -333,13 +421,7 @@ window.__ModuleLoader__.load({
                             type: 'button',
                             onClick: () => setIndex(i),
                             title: item.url,
-                            style: Object.assign({}, buttonStyle, {
-                              height: 26,
-                              padding: '0 10px',
-                              font: '12px/1 inherit',
-                              borderColor: i === index ? T.brand : T.border2,
-                              color: i === index ? T.brand : T.text2,
-                            }),
+                            className: i === index ? 'ltk-btn ltk-sm ltk-on' : 'ltk-btn ltk-sm',
                           },
                           item.address,
                         ),
@@ -349,7 +431,7 @@ window.__ModuleLoader__.load({
                 data && data.token === 'required'
                   ? h(
                       'div',
-                      { style: { font: '12px/1.5 inherit', color: T.text2 } },
+                      { className: 'ltk-note' },
                       '已开启访问口令：链接里带着 ?k=…，扫出来就能直接进，别把这张二维码发出局域网。',
                     )
                   : null,
@@ -357,13 +439,13 @@ window.__ModuleLoader__.load({
             )
           : h(
               'div',
-              { style: { font: '13px/1.6 inherit', color: T.text2 } },
+              { className: 'ltk-note' },
               '没找到局域网 IPv4 地址：确认这台机器连着 Wi-Fi 或有线网，然后重启 DSH。',
             ),
 
         h(
           'div',
-          { style: { display: 'flex', gap: 22, flexWrap: 'wrap', paddingTop: 12, borderTop: `1px solid ${T.border1}` } },
+          { className: 'ltk-stats' },
           h(Stat, { label: '会话', value: stats.agents == null ? '–' : stats.agents }),
           h(Stat, { label: '运行中', value: stats.running == null ? '–' : stats.running }),
           h(Stat, { label: '任务', value: stats.tasks == null ? '–' : stats.tasks }),
@@ -377,7 +459,7 @@ window.__ModuleLoader__.load({
         data
           ? h(
               'div',
-              { style: { font: '12px/1.6 inherit', color: T.text2 } },
+              { className: 'ltk-foot' },
               `本机入口 ${data.localUrl} · 只读投影，不会改任何会话状态`,
             )
           : null,
@@ -387,60 +469,35 @@ window.__ModuleLoader__.load({
     /* ────────────────────────── 三个挂载点 ────────────────────────── */
 
     function SettingsSection() {
+      ensureStyle()
       const [state, reload] = usePanelData()
       return h(
         'section',
-        {
-          style: {
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-            padding: 18,
-            borderRadius: 14,
-            background: T.layer1,
-            border: `1px solid ${T.border1}`,
-          },
-        },
+        { className: 'ltk ltk-card' },
         h(
           'header',
-          { style: { display: 'flex', alignItems: 'center', gap: 10 } },
-          h('span', { style: { color: T.brand, lineHeight: 0 } }, h(QrGlyph, { size: 20 })),
-          h('h3', { style: { margin: 0, font: '600 15px/1.3 inherit', color: T.text1 } }, '局域网任务看板'),
-          h(
-            'span',
-            { style: { marginLeft: 'auto', font: '12px/1.5 inherit', color: T.text2 } },
-            '手机扫码查看当前任务',
-          ),
+          { className: 'ltk-head' },
+          h('span', { className: 'ltk-glyph' }, h(QrGlyph, { size: 20 })),
+          h('h3', null, '局域网任务看板'),
+          h('span', { className: 'ltk-hint' }, '手机扫码查看当前任务'),
         ),
         h(PanelBody, { state, reload }),
       )
     }
 
     function FooterAction(props) {
+      ensureStyle()
       const wide = !!(props && props.wide)
       const open = useStore(openStore)
+      const cls = ['ltk', 'ltk-footerBtn', wide ? 'ltk-wide' : 'ltk-narrow', open ? 'ltk-open' : ''].join(' ')
       return h(
         'button',
         {
           type: 'button',
+          className: cls,
           title: '局域网任务看板 · 扫码用手机看',
           'aria-expanded': open,
           onClick: () => openStore.write(!openStore.read()),
-          style: {
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: wide ? 'flex-start' : 'center',
-            gap: 8,
-            width: wide ? '100%' : 36,
-            height: 36,
-            padding: wide ? '0 10px' : 0,
-            borderRadius: 9,
-            border: `1px solid ${open ? T.brand : 'transparent'}`,
-            background: open ? T.layer2 : 'transparent',
-            color: open ? T.brand : T.text2,
-            font: '13px/1 inherit',
-            cursor: 'pointer',
-          },
         },
         h(QrGlyph, { size: 18 }),
         wide ? h('span', null, '局域网看板') : null,
@@ -448,6 +505,7 @@ window.__ModuleLoader__.load({
     }
 
     function OverlayHost() {
+      ensureStyle()
       const open = useStore(openStore)
       const [state, reload] = usePanelData()
 
@@ -465,50 +523,28 @@ window.__ModuleLoader__.load({
       const close = () => openStore.write(false)
       return h(
         'div',
-        {
-          onClick: close,
-          style: {
-            position: 'fixed',
-            inset: 0,
-            zIndex: 60,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-            background: 'rgba(0, 0, 0, 0.45)',
-            pointerEvents: 'auto',
-          },
-        },
+        { className: 'ltk ltk-overlay', onClick: close, style: { pointerEvents: 'auto' } },
         h(
           'div',
           {
+            className: 'ltk-dialog',
             onClick: (event) => event.stopPropagation(),
             role: 'dialog',
             'aria-label': '局域网任务看板',
-            style: {
-              width: 'min(560px, 100%)',
-              maxHeight: '86vh',
-              overflow: 'auto',
-              padding: 20,
-              borderRadius: 16,
-              background: T.layer1,
-              border: `1px solid ${T.border1}`,
-              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.45)',
-              color: T.text1,
-            },
           },
           h(
             'header',
-            { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 } },
-            h('span', { style: { color: T.brand, lineHeight: 0 } }, h(QrGlyph, { size: 20 })),
-            h('h3', { style: { margin: 0, font: '600 15px/1.3 inherit' } }, '局域网任务看板'),
+            { className: 'ltk-head', style: { marginBottom: 14 } },
+            h('span', { className: 'ltk-glyph' }, h(QrGlyph, { size: 20 })),
+            h('h3', null, '局域网任务看板'),
             h(
               'button',
               {
                 type: 'button',
+                className: 'ltk-btn ltk-sm',
                 onClick: close,
                 title: '关闭（Esc）',
-                style: Object.assign({}, buttonStyle, { marginLeft: 'auto', height: 28, padding: '0 10px' }),
+                style: { marginLeft: 'auto' },
               },
               '关闭',
             ),
@@ -521,6 +557,7 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots'],
       apply(ctx) {
+        ensureStyle()
         ctx.slots.inject('settings.section', () =>
           ctx.slots.register(
             { name: 'settings.section', id: 'lan-tasks', order: 32, label: '局域网任务看板' },

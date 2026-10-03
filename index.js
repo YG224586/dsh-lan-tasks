@@ -39,7 +39,7 @@ import { qrAscii, qrSvg } from './qrcode.js'
 export const inject = ['webServer']
 
 const NAME = 'dsh-lan-tasks'
-const VERSION = '1.3.0'
+const VERSION = '1.4.0'
 
 const DEFAULTS = {
   /** 监听端口。和 DSH 的 19387 错开，避免抢端口。 */

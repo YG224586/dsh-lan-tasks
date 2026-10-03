@@ -170,7 +170,7 @@ class FakeImage {
   get src() { return this._src }
 }
 
-const html = renderPage({ version: '1.3.0', port: PORT, host: '127.0.0.1', token: '' })
+const html = renderPage({ version: '1.4.0', port: PORT, host: '127.0.0.1', token: '' })
 const script = html.slice(html.lastIndexOf('<script>') + '<script>'.length, html.lastIndexOf('</script>'))
 
 async function loadPage({ port, search = '', failSession = false }) {
@@ -230,6 +230,18 @@ check('实例 A 起来了（/healthz）', await healthz(PORT))
 const guarded = makeInstance()
 apply(guarded.ctx, { port: TOKEN_PORT, host: '127.0.0.1', token: TOKEN, history: 20, intervalMs: 800 })
 check('实例 B 起来了（带口令）', await healthz(TOKEN_PORT, TOKEN))
+
+/* ── 0. 页面外壳：MD3 Expressive 样式与图标 ── */
+const shellHtml = await (await fetch(`${originOf(PORT)}/`)).text()
+check(
+  '页面用的是 M3 颜色角色，不是硬编码色值',
+  shellHtml.includes('--md-primary:#b9c8ff') && shellHtml.includes('--md-on-surface:#e3e2e6') && shellHtml.includes('--md-error:#ffb4ab'),
+)
+check('卡片/圆形按 M3 形状阶', shellHtml.includes('--r-2xl:28px') && shellHtml.includes('--r-full:999px'))
+check('带弹簧动效与关键帧', shellHtml.includes('--e-spring:cubic-bezier(.34,1.56,.64,1)') && shellHtml.includes('@keyframes ltSheetIn'))
+check('浅色主题有整套取值', shellHtml.includes('prefers-color-scheme:light') && shellHtml.includes('color-scheme:light'))
+check('系统要求减弱动效时关掉动画', shellHtml.includes('prefers-reduced-motion:reduce'))
+check('主题色与图标已换新配色', shellHtml.includes('#0f1216') && !shellHtml.includes('#0b0f14'))
 
 /* ── 1. 首页 → 点进会话 ── */
 const page = await loadPage({ port: PORT })

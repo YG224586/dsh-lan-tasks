@@ -269,7 +269,7 @@ check('作业合并去重', snap.jobs.length === 2 && snap.stats.jobsRunning ===
 check('目标读到', !!snap.goal && snap.goal.phase === 'active' && snap.goal.roundsStarted === 3, snap.goal && snap.goal.objective)
 check('动态有内容', snap.activity.length >= 5, `activity=${snap.activity.length}`)
 check('动态最新在前', snap.activity[0].t >= snap.activity[snap.activity.length - 1].t)
-check('元信息完整', snap.version === '1.3.0' && typeof snap.port === 'number' && Array.isArray(snap.addresses))
+check('元信息完整', snap.version === '1.4.0' && typeof snap.port === 'number' && Array.isArray(snap.addresses))
 
 // 4. SSE
 const sseText = await new Promise((resolve, reject) => {
@@ -321,7 +321,7 @@ if (!HAS_WEB) {
   check('面板状态 200 JSON', panelRes.status === 200 && panel.ok === true && panel.name === 'dsh-lan-tasks', `${panelRes.status}`)
   check(
     '面板版本/监听/端口',
-    panel.version === '1.3.0' && panel.listening === true && panel.port === PORT,
+    panel.version === '1.4.0' && panel.listening === true && panel.port === PORT,
     JSON.stringify({ version: panel.version, listening: panel.listening, port: panel.port }),
   )
   check('面板本机入口 + 无口令', panel.localUrl === `http://127.0.0.1:${PORT}/` && panel.token === 'off', panel.localUrl)

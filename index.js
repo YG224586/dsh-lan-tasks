@@ -10,18 +10,28 @@
  *   GET /icon.svg             图标
  *   GET /healthz              自检：监听地址、可达 URL、版本
  *
+ * 另外把桌面 GUI 面板要用的三个路由挂到宿主的 webServer 上（和 GUI 同源，不用跨域）：
+ *
+ *   GET /lan-tasks/state      面板数据：版本、监听状态、局域网地址 + 二维码、统计
+ *   GET /lan-tasks/qr.svg?i=N 第 N 个局域网地址的二维码（SVG）
+ *   GET /lan-tasks/qr.txt?i=N 同一张二维码的终端字符画
+ *
  * 数据全部是只读投影：agents / sessions / agentTeams / jobs / goals，
  * 外加一份自己维护的「最近动态」环形缓冲。任何一步读不到都只让对应段落消失，
  * 绝不抛到 DSH 主流程里 —— 看板挂掉不能把宿主带崩。
  *
- * 刻意不依赖 DSH 自带的 webServer：那个只监听 127.0.0.1，手机过不来。
+ * 手机页面必须自己监听 0.0.0.0（宿主 webServer 只监听 127.0.0.1，手机过不来）；
+ * 桌面面板反过来必须走宿主 webServer，否则 GUI 里 fetch 会跨域。
  */
 import http from 'node:http'
 import os from 'node:os'
 import { ICON_SVG, renderPage } from './page.js'
+import { qrAscii, qrSvg } from './qrcode.js'
+
+export const inject = ['webServer']
 
 const NAME = 'dsh-lan-tasks'
-const VERSION = '1.1.0'
+const VERSION = '1.2.0'
 
 const DEFAULTS = {
   /** 监听端口。和 DSH 的 19387 错开，避免抢端口。 */
@@ -914,6 +924,116 @@ export function apply(ctx, config) {
     return lanAddresses().map((a) => `http://${a.address}:${at}${token ? `/?k=${encodeURIComponent(token)}` : ''}`)
   }
 
+  /* ── 桌面 GUI 面板：挂到宿主 webServer，和 GUI 同源 ── */
+
+  const PANEL_BASE = '/lan-tasks'
+
+  /** 面板要展示的局域网入口：完整 URL（带 token）+ 对应二维码地址。 */
+  function panelAddresses() {
+    const at = boundPort || port
+    const tail = token ? `/?k=${encodeURIComponent(token)}` : '/'
+    return lanAddresses().map((a, i) => ({
+      index: i,
+      name: a.name,
+      address: a.address,
+      url: `http://${a.address}:${at}${tail}`,
+      qr: `${PANEL_BASE}/qr.svg?i=${i}`,
+    }))
+  }
+
+  /** 选一个地址生成二维码：索引越界退回第一个；一个局域网地址都没有就返回 undefined。 */
+  function qrTarget(index) {
+    const list = panelAddresses()
+    if (!list.length) return undefined
+    return list[index] || list[0]
+  }
+
+  /** 面板整体状态。快照读失败也要回一份能显示的 JSON，面板不能白屏。 */
+  function panelState() {
+    let snapshot = { stats: {}, notes: [] }
+    try {
+      snapshot = buildSnapshot()
+    } catch (err) {
+      snapshot = { stats: {}, notes: [msg(err)] }
+    }
+    const at = boundPort || port
+    const tail = token ? `/?k=${encodeURIComponent(token)}` : '/'
+    return {
+      ok: true,
+      name: NAME,
+      version: VERSION,
+      listening: server.listening === true,
+      port: at,
+      host,
+      token: token ? 'required' : 'off',
+      localUrl: `http://127.0.0.1:${at}${tail}`,
+      addresses: panelAddresses(),
+      stats: snapshot.stats || {},
+      notes: snapshot.notes || [],
+      sessions: tracks.size,
+      updatedAt: Date.now(),
+    }
+  }
+
+  function readIndex(req) {
+    try {
+      const url = new URL(req.url || '/', 'http://localhost')
+      const raw = url.searchParams.get('i')
+      if (raw === null) return 0
+      const value = Number(raw)
+      return Number.isInteger(value) && value >= 0 ? value : 0
+    } catch {
+      return 0
+    }
+  }
+
+  const web = svc('webServer')
+  if (web && typeof web.register === 'function') {
+    const route = (pathname, handler) => ctx.effect(() => web.register({ kind: 'exact', path: pathname, handler }))
+
+    route(`${PANEL_BASE}/state`, (req, res) => {
+      try {
+        sendJson(res, 200, panelState())
+      } catch (err) {
+        sendJson(res, 500, { ok: false, error: msg(err) })
+      }
+    })
+
+    route(`${PANEL_BASE}/qr.svg`, (req, res) => {
+      const target = qrTarget(readIndex(req))
+      if (!target) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('no lan address')
+        return
+      }
+      let svg
+      try {
+        svg = qrSvg(target.url)
+      } catch (err) {
+        res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }).end(msg(err))
+        return
+      }
+      res.writeHead(200, {
+        'content-type': 'image/svg+xml; charset=utf-8',
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+      })
+      res.end(svg)
+    })
+
+    route(`${PANEL_BASE}/qr.txt`, (req, res) => {
+      const target = qrTarget(readIndex(req))
+      if (!target) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('no lan address')
+        return
+      }
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(`${target.url}\n\n${qrAscii(target.url)}`)
+    })
+  } else {
+    // eslint-disable-next-line no-console
+    console.error(`[${NAME}] 宿主没有 webServer，桌面 GUI 面板不可用（手机页面不受影响）。`)
+  }
+
   function banner() {
     const list = urls()
     const lines = [
@@ -931,6 +1051,15 @@ export function apply(ctx, config) {
     lines.push(`  自检接口：  http://127.0.0.1:${boundPort || port}/healthz`)
     lines.push('  ────────────────────────────────────────────')
     lines.push('')
+    // 终端里直接打一张二维码：手机相机对着屏幕就能扫
+    if (list.length && process.stdout && process.stdout.isTTY) {
+      try {
+        lines.push('  扫码打开（手机相机对着下面这张）：')
+        lines.push(qrAscii(list[0]))
+      } catch (err) {
+        lines.push(`  （二维码生成失败：${msg(err)}）`)
+      }
+    }
     // eslint-disable-next-line no-console
     console.log(lines.join('\n'))
   }

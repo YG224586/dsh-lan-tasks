@@ -1,9 +1,9 @@
 {
   "name": "@local/dsh-lan-tasks",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "局域网任务看板：在手机浏览器里实时查看 DSH 的会话、任务板、后台作业与活动流水。",
+  "description": "局域网任务看板：在手机浏览器里实时查看 DSH 的会话、任务板、后台作业与活动流水；桌面 GUI 里也有一块扫码面板。",
   "icon": "./icon.svg",
   "meta": {
     "title": "局域网任务看板",
@@ -12,17 +12,28 @@
   "exports": {
     ".": "./index.js",
     "./page": "./page.js",
+    "./client": "./client.js",
+    "./qrcode": "./qrcode.js",
     "./package.json": "./package.json"
   },
   "files": [
     "index.js",
     "page.js",
+    "client.js",
+    "qrcode.js",
     "cordis.patch.yml",
     "icon.svg"
   ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
     }
   }
 }
